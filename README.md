@@ -123,6 +123,22 @@ You can pass another theme file with:
 python3 -m emf_adventure play --theme path/to/theme.json
 ```
 
+## Aliases
+
+Search synonyms and ambiguous terms live in [aliases.json](aliases.json). This
+keeps event-specific language out of the navigation code. Examples:
+
+- `main stage` resolves to `Stage A`.
+- `pub`, `beer`, and `robot arms` resolve to `Bar`.
+- `loo`, `portaloo`, `bathroom`, and `wc` resolve to toilets.
+- `food` asks whether you mean food vendors or the volunteer kitchen.
+
+You can pass another alias file with:
+
+```bash
+python3 -m emf_adventure play --aliases path/to/aliases.json
+```
+
 ## Design Notes
 
 - The runtime has no third-party Python dependencies.

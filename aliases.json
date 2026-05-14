@@ -1,0 +1,54 @@
+{
+  "aliases": {
+    "main stage": "stage a",
+    "medical": "first aid",
+    "store": "shop",
+    "site entrance": "main gate",
+    "main entrance": "main gate",
+    "south entrance": "main gate",
+    "bar": "bar",
+    "pub": "bar",
+    "robot arms": "bar",
+    "beer": "bar",
+    "loo": "toilets",
+    "loos": "toilets",
+    "portaloo": "toilets",
+    "portaloos": "toilets",
+    "composting toilet": "toilets",
+    "composting toilets": "toilets",
+    "bathroom": "toilets",
+    "bathrooms": "toilets",
+    "wc": "toilets",
+    "wcs": "toilets"
+  },
+  "prefer": {
+    "bar": ["Bar"],
+    "toilets": ["event area (toilets)"],
+    "stage a": ["Stage A"],
+    "main gate": ["Main gate"]
+  },
+  "ambiguous": {
+    "food": {
+      "prompt": "Food can mean food vendors or the volunteer kitchen. Try `find food vendors` or `find volunteer kitchen`.",
+      "options": {
+        "food vendors": "food vendors",
+        "volunteer kitchen": "volunteer kitchen"
+      }
+    },
+    "kitchen": {
+      "prompt": "Kitchen can mean the crew kitchen or volunteer kitchen. Try `find crew kitchen` or `find volunteer kitchen`.",
+      "options": {
+        "crew kitchen": "crew kitchen",
+        "volunteer kitchen": "volunteer kitchen"
+      }
+    },
+    "toilet": {
+      "prompt": "I can find toilets. Accessible/type-specific toilet data is not in the current alias file yet, so try `find toilets` for now.",
+      "options": {
+        "toilets": "toilets",
+        "accessible toilets": "accessible toilets",
+        "composting toilets": "toilets"
+      }
+    }
+  }
+}

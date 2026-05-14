@@ -5,13 +5,14 @@ from pathlib import Path
 import shlex
 import sys
 
+from .aliases import DEFAULT_ALIASES_PATH, AliasBook, load_aliases
 from .cache import DEFAULT_CACHE_PATH, load_cache, refresh_cache
 from .display import render_display
 from .geo import COMPASS_BEARINGS, DEFAULT_LAT, DEFAULT_LON, DEFAULT_ZOOM, Point, fmt_distance
 from .routing import Router
 from .speech import Speaker
 from .theme import DEFAULT_THEME_PATH, Theme, load_theme
-from .world import World
+from .world import World, normalize
 
 
 PROMPT = "emf> "
@@ -45,6 +46,7 @@ def build_parser() -> argparse.ArgumentParser:
     play.add_argument("--lon", type=float, default=DEFAULT_LON)
     play.add_argument("--cache", type=Path, default=DEFAULT_CACHE_PATH)
     play.add_argument("--theme", type=Path, default=DEFAULT_THEME_PATH)
+    play.add_argument("--aliases", type=Path, default=DEFAULT_ALIASES_PATH)
     play.add_argument("--speak", action="store_true", help="Speak shell output using the system TTS command.")
     play.add_argument("--refresh-if-missing", action="store_true")
     return parser
@@ -73,10 +75,11 @@ def command_play(args: argparse.Namespace) -> int:
 
     feature_collection = load_cache(args.cache)
     theme = load_theme(args.theme)
+    aliases = load_aliases(args.aliases)
     world = World(feature_collection, theme)
     router = Router(feature_collection, theme)
     speaker = Speaker(enabled=args.speak)
-    state = AdventureState(Point(args.lat, args.lon), world, router, theme, speaker)
+    state = AdventureState(Point(args.lat, args.lon), world, router, theme, speaker, aliases)
     state.output(theme.text("welcome"))
     if args.speak and not speaker.available:
         state.output("Speech requested, but I could not find a system text-to-speech command.", speak=False)
@@ -100,13 +103,22 @@ def command_play(args: argparse.Namespace) -> int:
 
 
 class AdventureState:
-    def __init__(self, position: Point, world: World, router: Router, theme: Theme, speaker: Speaker):
+    def __init__(
+        self,
+        position: Point,
+        world: World,
+        router: Router,
+        theme: Theme,
+        speaker: Speaker,
+        aliases: AliasBook,
+    ):
         self.position = position
         self.heading: float | None = None
         self.world = world
         self.router = router
         self.theme = theme
         self.speaker = speaker
+        self.aliases = aliases
 
     def output(self, text: str, speak: bool = True) -> None:
         print(text)
@@ -261,7 +273,10 @@ class AdventureState:
     def find_or_route(self, query: str, route: bool) -> None:
         if not query:
             raise ValueError("Tell me what to find, for example `route main stage`.")
-        matches = self.world.find(query)
+        resolved = self.resolve_query(query)
+        if resolved is None:
+            return
+        matches = self.sort_alias_matches(resolved, self.world.find(resolved))
         if not matches:
             self.output(f"I could not find `{query}` in the cached map data.")
             return
@@ -277,7 +292,10 @@ class AdventureState:
     def teleport(self, query: str) -> None:
         if not query:
             raise ValueError("Tell me where to teleport, for example `teleport site entrance`.")
-        matches = self.world.find(query)
+        resolved = self.resolve_query(query)
+        if resolved is None:
+            return
+        matches = self.sort_alias_matches(resolved, self.world.find(resolved))
         if not matches:
             self.output(f"I could not find `{query}` in the cached map data.")
             return
@@ -287,6 +305,20 @@ class AdventureState:
         self.print_position()
         self.output(self.world.describe_nearby(self.position, 60, limit=8))
         self.output(self.router.describe_exits(self.position))
+
+    def resolve_query(self, query: str) -> str | None:
+        ambiguous = self.aliases.ambiguity(query)
+        if ambiguous:
+            self.output(ambiguous.prompt)
+            return None
+        return self.aliases.resolve(query)
+
+    def sort_alias_matches(self, query: str, matches):
+        preferred = self.aliases.preferred(query)
+        if not preferred:
+            return matches
+        rank = {name: index for index, name in enumerate(preferred)}
+        return sorted(matches, key=lambda landmark: rank.get(normalize(landmark.name), len(rank)))
 
 
 def _optional_float(args: list[str], default: float) -> float:

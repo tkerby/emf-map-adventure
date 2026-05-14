@@ -39,6 +39,10 @@ find main stage
 route stage a
 go south
 go ne 30
+path north 50
+follow west 30
+exits
+teleport site entrance
 gps 52.040163 -2.376955
 where
 help
@@ -47,6 +51,31 @@ quit
 
 The cache lives at `data/emf_map_cache.json`. Run `refresh` whenever the live
 GeoJSON/vector-tile data changes.
+
+## Movement
+
+There are two movement styles:
+
+```text
+go north 50
+path north 50
+follow west 30
+```
+
+`go` moves directly by compass bearing, useful for open grass or testing GPS-like
+movement. `path` and `follow` snap to the nearest mapped walkway if you are close
+enough, then progress along the path graph in the requested compass direction.
+
+Useful navigation helpers:
+
+```text
+exits
+teleport main stage
+teleport site entrance
+```
+
+The main site entrance is at the south of the map; `site entrance`, `main
+entrance`, and `south entrance` are search aliases for it.
 
 ## 8-bit Display
 

@@ -19,7 +19,7 @@ from .geo import (
 from .theme import Theme, load_theme
 
 
-PATH_LAYERS = {"path_centreline"}
+PATH_LAYERS = {"path_centreline", "street_names"}
 PATH_TYPES = {"trackway": 1.0, "grass": 1.18, None: 1.08}
 OFF_PATH_WEIGHT = 1.5
 
@@ -37,6 +37,13 @@ class NearestNode:
     node: int
     point: Point
     distance_m: float
+
+
+@dataclass
+class FollowResult:
+    point: Point
+    distance_m: float
+    narration: str
 
 
 class Router:
@@ -81,7 +88,7 @@ class Router:
             if props.get("_layer") not in PATH_LAYERS:
                 continue
             geom = feature.get("geometry", {})
-            path_type = str(props.get("type") or "path")
+            path_type = str(props.get("name") or props.get("type") or "path")
             lines = _geometry_lines(geom)
             for line in lines:
                 for a, b in zip(line, line[1:]):
@@ -103,8 +110,8 @@ class Router:
                 distance = haversine_m(a, b)
                 if distance <= 0.5 or distance > max_gap_m:
                     continue
-                edge = Edge(b_id, distance, distance * OFF_PATH_WEIGHT, "connector")
-                reverse = Edge(a_id, distance, distance * OFF_PATH_WEIGHT, "connector")
+                edge = Edge(b_id, distance, distance * OFF_PATH_WEIGHT, "link")
+                reverse = Edge(a_id, distance, distance * OFF_PATH_WEIGHT, "link")
                 self.edges[a_id].append(edge)
                 self.edges[b_id].append(reverse)
 
@@ -188,6 +195,37 @@ class Router:
             off_path=grass_note,
         )
 
+    def exits(self, position: Point, snap_distance_m: float = 45) -> list[tuple[str, float, str]]:
+        nearby_nodes = self._nearby_nodes(position, snap_distance_m)
+        if not nearby_nodes:
+            return []
+        exits = []
+        best_by_direction: dict[str, tuple[float, float, str]] = {}
+        for nearest in nearby_nodes[:8]:
+            for edge in self.edges.get(nearest.node, []):
+                target = self.nodes[edge.to_node]
+                direction = compass_name(bearing_degrees(nearest.point, target))
+                link_penalty = 80 if edge.path_type == "link" else 0
+                score = nearest.distance_m + edge.length_m * 0.1 + link_penalty
+                existing = best_by_direction.get(direction)
+                if existing is None or score < existing[0]:
+                    best_by_direction[direction] = (score, edge.length_m, edge.path_type)
+        for direction, (_, length, path_type) in best_by_direction.items():
+            exits.append((direction, length, path_type))
+        return sorted(exits, key=lambda item: item[0])
+
+    def describe_exits(self, position: Point, snap_distance_m: float = 45) -> str:
+        nearest = self.nearest_node(position)
+        if not nearest:
+            return "No mapped paths in the current cache."
+        if nearest.distance_m > snap_distance_m:
+            return f"Nearest mapped path is {fmt_distance(nearest.distance_m)} away."
+        exits = self.exits(position, snap_distance_m)
+        if not exits:
+            return "You are near a mapped path, but I cannot see any onward path exits."
+        parts = [f"{direction} ({path_type})" for direction, _, path_type in exits]
+        return "Paths lead " + ", ".join(parts) + "."
+
     def step(self, position: Point, bearing: float, distance_m: float = 20) -> tuple[Point, str]:
         nearest = self.nearest_node(position)
         if not nearest or nearest.distance_m > 18:
@@ -219,6 +257,103 @@ class Router:
             path_type=edge.path_type,
             direction=compass_name(bearing_degrees(nearest.point, target)),
         )
+
+    def follow_path(
+        self, position: Point, bearing: float, distance_m: float = 20, snap_distance_m: float = 45
+    ) -> FollowResult:
+        nearest = self._nearest_node_for_bearing(position, bearing, snap_distance_m)
+        if nearest is None:
+            nearest = self.nearest_node(position)
+        if not nearest:
+            return FollowResult(position, 0, "No mapped paths in the current cache.")
+        if nearest.distance_m > snap_distance_m:
+            return FollowResult(
+                position,
+                0,
+                f"Nearest mapped path is {fmt_distance(nearest.distance_m)} away; move closer or use `go`.",
+            )
+
+        node = nearest.node
+        previous_node: int | None = None
+        remaining = distance_m
+        travelled = 0.0
+        current_point = nearest.point
+        directions: list[tuple[str, float, str]] = []
+        snap_text = ""
+        if nearest.distance_m > 4:
+            snap_text = f"Snapped {fmt_distance(nearest.distance_m)} to the nearest mapped path. "
+
+        while remaining > 0.5:
+            edge = self._best_follow_edge(node, bearing, previous_node)
+            if edge is None:
+                break
+            target = self.nodes[edge.to_node]
+            edge_bearing = bearing_degrees(current_point, target)
+            direction = compass_name(edge_bearing)
+            step_distance = min(remaining, edge.length_m)
+            directions.append((direction, step_distance, edge.path_type))
+            travelled += step_distance
+
+            if step_distance >= edge.length_m:
+                previous_node = node
+                node = edge.to_node
+                current_point = target
+            else:
+                ratio = step_distance / edge.length_m
+                ax, ay = local_xy_m(self.origin, current_point)
+                bx, by = local_xy_m(self.origin, target)
+                current_point = point_from_local_xy(
+                    self.origin, ax + (bx - ax) * ratio, ay + (by - ay) * ratio
+                )
+                remaining = 0
+                break
+            remaining -= step_distance
+
+        if travelled <= 0:
+            return FollowResult(
+                nearest.point,
+                0,
+                snap_text + "No mapped path continues that way from here.",
+            )
+
+        summary = _summarise_follow(directions)
+        return FollowResult(current_point, travelled, snap_text + f"Followed mapped paths {summary}.")
+
+    def _best_follow_edge(self, node: int, bearing: float, previous_node: int | None) -> Edge | None:
+        candidates = [edge for edge in self.edges.get(node, []) if edge.to_node != previous_node]
+        if not candidates:
+            candidates = list(self.edges.get(node, []))
+        best: tuple[float, Edge] | None = None
+        for edge in candidates:
+            edge_bearing = bearing_degrees(self.nodes[node], self.nodes[edge.to_node])
+            difference = angular_difference(bearing, edge_bearing)
+            if difference > 115:
+                continue
+            if best is None or difference < best[0]:
+                best = (difference, edge)
+        return None if best is None else best[1]
+
+    def _nearby_nodes(self, point: Point, max_distance_m: float) -> list[NearestNode]:
+        nearby = []
+        for index, node_point in enumerate(self.nodes):
+            distance = haversine_m(point, node_point)
+            if distance <= max_distance_m:
+                nearby.append(NearestNode(index, node_point, distance))
+        return sorted(nearby, key=lambda item: item.distance_m)
+
+    def _nearest_node_for_bearing(
+        self, point: Point, bearing: float, max_distance_m: float
+    ) -> NearestNode | None:
+        best: tuple[float, NearestNode] | None = None
+        for candidate in self._nearby_nodes(point, max_distance_m):
+            edge = self._best_follow_edge(candidate.node, bearing, None)
+            if edge is None:
+                continue
+            edge_bearing = bearing_degrees(candidate.point, self.nodes[edge.to_node])
+            score = candidate.distance_m + angular_difference(bearing, edge_bearing) * 0.35
+            if best is None or score < best[0]:
+                best = (score, candidate)
+        return None if best is None else best[1]
 
 
 def _first_point(coords: Any) -> Point | None:
@@ -271,3 +406,19 @@ def _summarise_legs(points: list[Point]) -> list[tuple[str, float]]:
     if current_direction:
         summaries.append((current_direction, current_distance))
     return summaries
+
+
+def _summarise_follow(steps: list[tuple[str, float, str]]) -> str:
+    if not steps:
+        return "nowhere"
+    merged: list[tuple[str, float, str]] = []
+    for direction, distance, path_type in steps:
+        if merged and merged[-1][0] == direction and merged[-1][2] == path_type:
+            prev_direction, prev_distance, prev_type = merged[-1]
+            merged[-1] = (prev_direction, prev_distance + distance, prev_type)
+        else:
+            merged.append((direction, distance, path_type))
+    return "; ".join(
+        f"{direction} on {path_type} for {fmt_distance(distance)}"
+        for direction, distance, path_type in merged[:5]
+    )

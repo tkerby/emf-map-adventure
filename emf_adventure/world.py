@@ -51,6 +51,8 @@ class Landmark:
             bits.append("medical")
         if canonical_name == "shop":
             bits.append("store")
+        if canonical_name in {"entrance", "main gate"}:
+            bits.append("site entrance main entrance south entrance")
         return normalize(" ".join(bits))
 
 

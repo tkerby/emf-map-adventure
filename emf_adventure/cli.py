@@ -147,6 +147,12 @@ class AdventureState:
             self.set_heading(rest)
         elif command in {"go", "walk", "move"}:
             self.go(rest)
+        elif command in {"path", "follow"}:
+            self.follow_path(rest)
+        elif command in {"teleport", "tp"}:
+            self.teleport(" ".join(rest))
+        elif command == "exits":
+            self.output(self.router.describe_exits(self.position))
         elif command in {"find", "route", "goto", "ask"}:
             self.find_or_route(" ".join(rest), route=command != "find")
         else:
@@ -222,6 +228,30 @@ class AdventureState:
                 raise ValueError("Use one of n, ne, e, se, s, sw, w, nw.")
         self.move(bearing, distance)
 
+    def follow_path(self, args: list[str]) -> None:
+        if not args:
+            if self.heading is None:
+                raise ValueError("Usage: path DIRECTION [METRES], or set `heading DEGREES` first.")
+            bearing = self.heading
+            distance = 20
+        else:
+            direction = args[0].lower()
+            if direction in COMPASS_BEARINGS:
+                bearing = COMPASS_BEARINGS[direction]
+                distance = _optional_float(args[1:], 20)
+            elif self.heading is not None:
+                bearing = self.heading
+                distance = float(direction)
+            else:
+                raise ValueError("Use one of n, ne, e, se, s, sw, w, nw.")
+
+        result = self.router.follow_path(self.position, bearing, distance)
+        self.position = result.point
+        self.output(result.narration)
+        self.print_position()
+        self.output(self.router.describe_exits(self.position))
+        self.output(self.world.describe_nearby(self.position, 50, limit=5))
+
     def move(self, bearing: float, distance: float) -> None:
         self.position, narration = self.router.step(self.position, bearing, distance)
         self.output(narration)
@@ -244,6 +274,20 @@ class AdventureState:
             if others:
                 self.output(f"Other possible matches: {others}.")
 
+    def teleport(self, query: str) -> None:
+        if not query:
+            raise ValueError("Tell me where to teleport, for example `teleport site entrance`.")
+        matches = self.world.find(query)
+        if not matches:
+            self.output(f"I could not find `{query}` in the cached map data.")
+            return
+        target = matches[0]
+        self.position = target.point
+        self.output(f"Teleported to {target.name}.")
+        self.print_position()
+        self.output(self.world.describe_nearby(self.position, 60, limit=8))
+        self.output(self.router.describe_exits(self.position))
+
 
 def _optional_float(args: list[str], default: float) -> float:
     if not args:
@@ -263,6 +307,10 @@ HELP_TEXT = """Commands:
   heading DEGREES         Set the direction you are facing.
   go DIRECTION [METRES]   Move with n/ne/e/se/s/sw/w/nw.
   go [METRES]             Move along your current heading.
+  path DIRECTION [METRES] Follow mapped paths in a compass direction.
+  follow DIRECTION [M]    Alias for path.
+  exits                   List mapped path directions from nearby.
+  teleport NAME           Jump directly to a named map feature.
   where                   Show current coordinates.
   quit                    Leave the shell.
 """

@@ -1,0 +1,16 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Generated/live map cache. Rebuild with:
+# python3 -m emf_adventure refresh
+data/
+
+# Local clone of the upstream EMF map repo used while prototyping.
+emf-map-source/
+

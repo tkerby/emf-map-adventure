@@ -1,0 +1,21 @@
+{
+  "name": "space",
+  "phrases": {
+    "welcome": "Welcome astronaut. Your landing coordinates are locked. Type `help` for commands.",
+    "nearby_header": "Scanner contacts within {radius}:",
+    "nearby_empty": "Long-range scanners find nothing named within {radius}. Try `nearby 150`.",
+    "nearby_item": "- {name}: {direction}, {distance} ({layer})",
+    "target_direction": "{name} is {direction} of your position, approx {distance} away.",
+    "direct_bearing": "Direct vector: {direction}, {distance}.",
+    "route_summary": "Route plot: approx {distance}; {legs}.{off_path}",
+    "route_missing": " I do not have a connected walkway route in the current cache.",
+    "off_path_note": " Includes approx {distance} off-path/open-ground at the ends.",
+    "move_open": "You leave the mapped walkway and cross open ground.",
+    "move_no_path": "No mapped path points that way; you cross open ground.",
+    "move_path": "You follow a {path_type} path {direction}.",
+    "position": "Suit position: {lat:.6f}, {lon:.6f}{heading}.",
+    "nearest_path": "Nearest mapped path node: {distance} away.",
+    "goodbye": "Safe travels, astronaut."
+  }
+}
+

@@ -276,7 +276,7 @@ class AdventureState:
         resolved = self.resolve_query(query)
         if resolved is None:
             return
-        matches = self.sort_alias_matches(resolved, self.world.find(resolved))
+        matches = self.sort_alias_matches(query, resolved, self.world.find(resolved))
         if not matches:
             self.output(f"I could not find `{query}` in the cached map data.")
             return
@@ -295,7 +295,7 @@ class AdventureState:
         resolved = self.resolve_query(query)
         if resolved is None:
             return
-        matches = self.sort_alias_matches(resolved, self.world.find(resolved))
+        matches = self.sort_alias_matches(query, resolved, self.world.find(resolved))
         if not matches:
             self.output(f"I could not find `{query}` in the cached map data.")
             return
@@ -313,8 +313,8 @@ class AdventureState:
             return None
         return self.aliases.resolve(query)
 
-    def sort_alias_matches(self, query: str, matches):
-        preferred = self.aliases.preferred(query)
+    def sort_alias_matches(self, original_query: str, resolved_query: str, matches):
+        preferred = self.aliases.preferred(original_query) or self.aliases.preferred(resolved_query)
         if not preferred:
             return matches
         rank = {name: index for index, name in enumerate(preferred)}

@@ -129,9 +129,10 @@ Search synonyms and ambiguous terms live in [aliases.json](aliases.json). This
 keeps event-specific language out of the navigation code. Examples:
 
 - `main stage` resolves to `Stage A`.
-- `pub`, `beer`, and `robot arms` resolve to `Bar`.
+- `bar` lists bars broadly; `pub` and `robot arms` prefer the main Bar.
 - `loo`, `portaloo`, `bathroom`, and `wc` resolve to toilets.
 - `food` asks whether you mean food vendors or the volunteer kitchen.
+- `drinks` and `refreshments` ask whether you mean bars or water points.
 
 You can pass another alias file with:
 

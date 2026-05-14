@@ -22,7 +22,8 @@
     "wcs": "toilets"
   },
   "prefer": {
-    "bar": ["Bar"],
+    "pub": ["Bar"],
+    "robot arms": ["Bar"],
     "toilets": ["event area (toilets)"],
     "stage a": ["Stage A"],
     "main gate": ["Main gate"]
@@ -40,6 +41,20 @@
       "options": {
         "crew kitchen": "crew kitchen",
         "volunteer kitchen": "volunteer kitchen"
+      }
+    },
+    "drinks": {
+      "prompt": "Drinks can mean bars or water points. Try `find bar` or `find water point`.",
+      "options": {
+        "bars": "bar",
+        "water points": "water point"
+      }
+    },
+    "refreshments": {
+      "prompt": "Refreshments can mean bars or water points. Try `find bar` or `find water point`.",
+      "options": {
+        "bars": "bar",
+        "water points": "water point"
       }
     },
     "toilet": {
